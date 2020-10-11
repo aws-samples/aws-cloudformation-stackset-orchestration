@@ -1,0 +1,27 @@
+Parameters:
+  CidrBlock:
+    Type: String
+    Description: The CIDR block to use for VPC creation.
+    Default: 10.0.0.0/16
+  EnableDnsHostnames:
+    Type: String
+    Description: Enable DNS Hostnames on the VPC.
+    Default: "true"
+    AllowedValues:
+      - "true"
+      - "false"
+  EnableDnsSupport:
+    Type: String
+    Description: Enable DNS support on the VPC.
+    AllowedValues:
+      - "true"
+      - "false"
+    Default: "true"
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref CidrBlock
+      EnableDnsHostnames: !Ref EnableDnsHostnames
+      EnableDnsSupport: !Ref EnableDnsSupport

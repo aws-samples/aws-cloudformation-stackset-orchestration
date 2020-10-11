@@ -1,0 +1,219 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+
+Parameters:
+  StackSetAdministratorPrincipal:
+    Type: String
+    Description: The ARN of the AWS principal allowed to add StackSet configuration files to the StackSet configuration bucket.
+
+Resources:
+  # S3 Bucket for account document storage
+  AccountBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "stackset-orchestration-bucket-${AWS::AccountId}"
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  StackSetAdministratorRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: StackSetAdministrator
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS:
+                - !Ref StackSetAdministratorPrincipal
+            Action:
+              - 'sts:AssumeRole'
+      Policies:
+        - PolicyName: AddConfigurationFilePermissions
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource:
+                  - !Sub "arn:aws:s3:::${AccountBucket}"
+              - Effect: Allow
+                Action:
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource:
+                  - !Sub "arn:aws:s3:::${AccountBucket}/*"
+
+  # Parse YAML file and trigger the Step Function pipeline with it
+  TriggerStepFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/01_trigger_step_function/
+      Environment:
+        Variables:
+          STATE_MACHINE: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:${StackSetOrchestrationStateMachine.Name}'
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Sub "stackset-orchestration-bucket-${AWS::AccountId}"
+        - StepFunctionsExecutionPolicy:
+            StateMachineName: !GetAtt StackSetOrchestrationStateMachine.Name
+      Events:
+        ObjectCreation:
+          Type: S3 # More info about API Event Source: https://github.com/awslabs/serverless-application-model/blob/master/versions/2016-10-31.md#s3
+          Properties:
+            Bucket: !Ref AccountBucket
+            Events: s3:ObjectCreated:*
+
+  # Create a StackSet instance on the desired account, continue the next step with the remaining StackSets
+  CreateUpdateDeleteStackInstances:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/02_create_update_delete_stack_instances/
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Role: !GetAtt StackInstancesRole.Arn
+      Timeout: 110
+
+  # Verify that a StackSet instance has been created on the specified account before moving to the next one
+  VerifyStackInstanceStatus:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda/03_verify_stack_instance_creation/
+      Handler: app.lambda_handler
+      Runtime: python3.7
+      Role: !GetAtt StackInstancesRole.Arn
+      Timeout: 110
+
+  # Role definition for all lambda functions which interact with StackSets
+  StackInstancesRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: AssumeCFRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: sts:AssumeRole
+                Resource: arn:aws:iam::aws:policy/aws-service-role/CloudFormationStackSetsOrgAdminServiceRolePolicy
+              - Effect: Allow
+                Action:
+                  - cloudformation:CreateStackInstances
+                  - cloudformation:DescribeStackInstance
+                  - cloudformation:DescribeStackSetOperation
+                  - cloudformation:ListStackInstances
+                  - cloudformation:UpdateStackInstances
+                  - cloudformation:DescribeStackSet
+                  - cloudformation:DeleteStackInstances
+                Resource: !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stackset/*:*
+              - Effect: Allow
+                Action: organizations:DescribeAccount
+                Resource: '*'
+
+  StackSetOrchestrationStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "stackset-orchestration-state-machine-${AWS::AccountId}"
+      Definition:
+        StartAt: CreateStackSetInstances
+        States:
+          CreateStackSetInstances:
+            Type: Map
+            ItemsPath: $.stacksets
+            Iterator:
+              StartAt: CreateUpdateDeleteStackInstances
+              States:
+                CreateUpdateDeleteStackInstances:
+                  Type: Task
+                  Resource: !GetAtt CreateUpdateDeleteStackInstances.Arn
+                  Retry:
+                    - ErrorEquals:
+                        - OperationInProgressException
+                        - ClientError
+                      IntervalSeconds: 120
+                      BackoffRate: 1.1
+                      MaxAttempts: 30
+                  Next: VerifyStackInstanceStatus
+                VerifyStackInstanceStatus:
+                  Type: Task
+                  Resource: !GetAtt VerifyStackInstanceStatus.Arn
+                  Retry:
+                    - ErrorEquals:
+                        - OperationInProgressException
+                        - ClientError
+                      IntervalSeconds: 120
+                      BackoffRate: 1.1
+                      MaxAttempts: 30
+                  Next: IsStackSetInstanceReady
+                IsStackSetInstanceReady:
+                  Type: Choice
+                  Choices:
+                    - Variable: $.stackset_instance_ready
+                      BooleanEquals: false
+                      Next: VerifyStackInstanceStatus
+                  Default: Done
+                Done:
+                  Type: Pass
+                  End: true
+            End: true
+      Role: !GetAtt StatesExecutionRole.Arn
+
+  # Role definition for the State Machine execution
+  StatesExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - states.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: StatesExecutionPolicy
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'lambda:InvokeFunction'
+                Resource:
+                  - !GetAtt CreateUpdateDeleteStackInstances.Arn
+                  - !GetAtt VerifyStackInstanceStatus.Arn
+              - Effect: "Allow"
+                Action:
+                  - "logs:CreateLogDelivery"
+                  - "logs:GetLogDelivery"
+                  - "logs:UpdateLogDelivery"
+                  - "logs:DeleteLogDelivery"
+                  - "logs:ListLogDeliveries"
+                  - "logs:PutResourcePolicy"
+                  - "logs:DescribeResourcePolicies"
+                  - "logs:DescribeLogGroups"
+                Resource:
+                  - "*"
+
+Outputs:
+  TriggerStepFunction:
+    Description: "TriggerStepFunction Lambda Function ARN"
+    Value: !GetAtt TriggerStepFunction.Arn
+  TriggerStepFunctionIamRole:
+    Description: "Implicit IAM Role created for TriggerStepFunction function"
+    Value: !GetAtt TriggerStepFunctionRole.Arn
