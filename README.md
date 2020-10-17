@@ -2,7 +2,7 @@
 
 This project allows you to orchestrate AWS CloudFormation StackSet instance creation by using YAML files on an Amazon S3 bucket.
 
-For further information, see this blog post: <TODO: add blog post link>
+For further information, see the [blog post related to this repository](https://aws.amazon.com/blogs/mt/aws-cloudformation-stackset-orchestration-automated-deployment-using-aws-step-functions/).
 
 ## Purposes
 
