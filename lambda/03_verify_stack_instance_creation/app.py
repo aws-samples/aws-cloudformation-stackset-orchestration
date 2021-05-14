@@ -20,7 +20,6 @@ import time
 from random import randrange
 
 cloudformation = boto3.client('cloudformation')
-region = os.environ["AWS_REGION"]
 
 class StacksetCreationError(Exception):
    pass
@@ -58,6 +57,7 @@ def stackset_instance_ready(stackset_name, account_id, region):
 
 
 def lambda_handler(event, context):
+    region = os.environ["AWS_REGION"]
     # Wait for stackset instance creation
     print("Waiting for stackset instance to be processed...")
     time.sleep(30)

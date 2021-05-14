@@ -1,0 +1,8 @@
+---
+account: '123456789876'
+terminate: True
+stacksets:
+- name: vpc
+  parameters:
+    CidrBlock: '10.0.0.0/24'
+    EnableDnsHostnames: "true"

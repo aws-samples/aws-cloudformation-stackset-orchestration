@@ -39,6 +39,8 @@ specified as a parameter at deployment time to assume it and put objects in the 
 
 - Also, make (https://www.gnu.org/software/make/) is used to deploy the resources, wrapping the SAM CLI commands. If you do not have make on your workstation, or you do not wish to install it, you can run the commands that are specified inside of the Makefile manually.
 
+- You will need pytest (https://docs.pytest.org/en/6.2.x/) for launching the test suite.
+
 ## Deployment
 
 In order to deploy the implementation, follow these steps:

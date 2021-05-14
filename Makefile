@@ -1,4 +1,4 @@
-.PHONY: build package changes deploy help
+.PHONY: build package changes deploy test help
 
 build: ## Build the SAM application locally using an AWS Lamnbda-like container
 	sam build --use-container
@@ -22,6 +22,9 @@ deploy: build package ## Deploy the SAM application
 		   --parameter-overrides \
 		   StackSetAdministratorPrincipal=$(stackset_administrator_principal) \
 		   --capabilities CAPABILITY_NAMED_IAM
+
+test: ## Run tests
+	for service in lambda/*; do AWS_DEFAULT_REGION=eu-west-1 pytest $$service; done
 
 help: ## Display this help screen
 	@grep -h -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'

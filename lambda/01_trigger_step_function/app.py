@@ -22,11 +22,10 @@ import yaml
 print('Loading function')
 
 s3 = boto3.client('s3')
-state_machine_arn = os.getenv('STATE_MACHINE')
 step_functions = boto3.client("stepfunctions")
 
 
-def lambda_handler(event, context):
+def get_config_file(event):
     # Get event parameters
     bucket = event['Records'][0]['s3']['bucket']['name']
     key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
@@ -37,22 +36,39 @@ def lambda_handler(event, context):
     except Exception as e:
         print(e)
         raise e
+    return config_file
 
+
+def parse(config_file):
     # Parse yaml file
     try:
-        configfile = yaml.safe_load(config_file["Body"])
+        parsed_config_file = yaml.safe_load(config_file["Body"])
     except yaml.YAMLError as exc:
         return exc
+    return parsed_config_file
 
-    for stackset in configfile["stacksets"]:
-        stackset["account"] = configfile["account"]
-        if "terminate" in configfile and configfile["terminate"]:
-            stackset["terminate"] = configfile["terminate"]
 
+def add_account_information(config_file):
+    for stackset in config_file["stacksets"]:
+        stackset["account"] = config_file["account"]
+        if "terminate" in config_file and config_file["terminate"]:
+            stackset["terminate"] = config_file["terminate"]
+    return config_file
+
+
+def trigger_step_function(config_file):
     # Start step function
-    print("Trigerring Step functions with these values: " + json.dumps(configfile, indent=2))
+    state_machine_arn = os.getenv('STATE_MACHINE')
+    print("Trigerring Step functions with these values: " + json.dumps(config_file, indent=2))
     response = step_functions.start_execution(
         stateMachineArn=state_machine_arn,
-        input=json.dumps(configfile))
+        input=json.dumps(config_file))
+    return response
 
+
+def lambda_handler(event, context):
+    config_file = get_config_file(event)
+    config_file = parse(config_file)
+    config_file = add_account_information(config_file)
+    response = trigger_step_function(config_file)
     return response['executionArn']

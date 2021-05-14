@@ -19,7 +19,6 @@ import os
 from random import randrange
 
 cloudformation = boto3.client('cloudformation')
-region = os.environ["AWS_REGION"]
 
 def format_parameters(parameters):
     formatted_parameters = []
@@ -43,6 +42,7 @@ def stackinstance_exists(stackset_name, account_id, region):
 
 def lambda_handler(event, context):
     # Get stackset instance information
+    region = os.environ["AWS_REGION"]
     account_id = str(event["account"])
     terminate_stack_instance = event["terminate"] if "terminate" in event else False
     stackset_name = event["name"]
