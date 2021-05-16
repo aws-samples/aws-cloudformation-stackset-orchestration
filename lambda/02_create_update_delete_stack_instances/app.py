@@ -13,69 +13,78 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import boto3
-import time
 import os
 from random import randrange
+import time
 
-cloudformation = boto3.client('cloudformation')
+import boto3
+
+cloudformation = boto3.client("cloudformation")
+
+AWS_REGION = os.environ["AWS_REGION"]
+
 
 def format_parameters(parameters):
     formatted_parameters = []
     for key, value in parameters.items():
-        formatted_parameters.append({
-            "ParameterKey": key,
-            "ParameterValue": value
-        })
+        formatted_parameters.append({"ParameterKey": key, "ParameterValue": value})
     return formatted_parameters
+
 
 def stackinstance_exists(stackset_name, account_id, region):
     # Add jitter
-    time.sleep(randrange(10,20))
-    stack_instance_size = len(cloudformation.list_stack_instances(
-                                StackSetName=stackset_name,
-                                StackInstanceAccount=account_id,
-                                StackInstanceRegion=region)["Summaries"]
+    time.sleep(randrange(10, 20))
+    stack_instance_size = len(
+        cloudformation.list_stack_instances(
+            StackSetName=stackset_name,
+            StackInstanceAccount=account_id,
+            StackInstanceRegion=region,
+        )["Summaries"]
     )
     return True if stack_instance_size > 0 else False
 
 
 def lambda_handler(event, context):
     # Get stackset instance information
-    region = os.environ["AWS_REGION"]
     account_id = str(event["account"])
     terminate_stack_instance = event["terminate"] if "terminate" in event else False
     stackset_name = event["name"]
-    parameter_overrides = format_parameters(event["parameters"]) if "parameters" in event else []
+    parameter_overrides = (
+        format_parameters(event["parameters"]) if "parameters" in event else []
+    )
 
     # Check if the operation is create, update or delete
     if terminate_stack_instance:
         operation_function = cloudformation.delete_stack_instances
         operation_arguments = {
-                "StackSetName": stackset_name,
-                "Accounts":[ account_id ],
-                "RetainStacks": False,
-                "Regions":[ region ]
+            "StackSetName": stackset_name,
+            "Accounts": [account_id],
+            "RetainStacks": False,
+            "Regions": [AWS_REGION],
         }
     else:
-        operation_function = cloudformation.update_stack_instances if stackinstance_exists(stackset_name, account_id, region) else cloudformation.create_stack_instances
+        operation_function = (
+            cloudformation.update_stack_instances
+            if stackinstance_exists(stackset_name, account_id, AWS_REGION)
+            else cloudformation.create_stack_instances
+        )
         operation_arguments = {
-                "StackSetName": stackset_name,
-                "Accounts": [ account_id ],
-                "ParameterOverrides": parameter_overrides,
-                "Regions": [ region ]
+            "StackSetName": stackset_name,
+            "Accounts": [account_id],
+            "ParameterOverrides": parameter_overrides,
+            "Regions": [AWS_REGION],
         }
 
     # Add jitter
-    time.sleep(randrange(10,20))
+    time.sleep(randrange(10, 20))
     # Perform operation
     response = operation_function(**operation_arguments)
     print(response)
 
     # Update stackset instance in creation data
     event["stackset_instance_in_treatment"] = {
-            "name": stackset_name,
-            "account_id": account_id
+        "name": stackset_name,
+        "account_id": account_id,
     }
 
     return event

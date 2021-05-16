@@ -1,135 +1,126 @@
 from botocore.stub import Stubber
-import app as code
+import pytest
+
+from fixtures import lambda_module
+
+lambda_module = pytest.fixture(
+    scope="module",
+    params=[
+        {
+            "function_dir": "02_create_update_delete_stack_instances",
+            "module_name": "app",
+            "environ": {
+                "AWS_REGION": "eu-west-1",
+            },
+        }
+    ],
+)(lambda_module)
 
 
-def test_handler_create(monkeypatch):
+def test_handler_create(lambda_module, monkeypatch):
     """
     Given a setup function input for creating stack instances
     When the handler is called
     Then the CreateStackInstances action of the CloudFormation API is called with the stackset parameters
     """
     # Given
-    monkeypatch.setenv("AWS_REGION", "eu-west-1")
-    monkeypatch.setattr(code.time, "sleep", lambda _: None)
+    monkeypatch.setattr(lambda_module.time, "sleep", lambda _: None)
     stackset_name = "vpc"
     account_id = "123456789876"
     region = "eu-west-1"
-    parameters = {
-        "CidrBlock": "10.0.0.0/24",
-        "EnableDnsHostnames": "true"
-    }
+    parameters = {"CidrBlock": "10.0.0.0/24", "EnableDnsHostnames": "true"}
     parameter_overrides = [
-        {
-            "ParameterKey": "CidrBlock",
-            "ParameterValue": "10.0.0.0/24"
-        },{
-            "ParameterKey": "EnableDnsHostnames",
-            "ParameterValue": "true"
-        }
+        {"ParameterKey": "CidrBlock", "ParameterValue": "10.0.0.0/24"},
+        {"ParameterKey": "EnableDnsHostnames", "ParameterValue": "true"},
     ]
     step_function_input = {
-      "name": stackset_name,
-      "parameters": parameters,
-      "account": account_id,
+        "name": stackset_name,
+        "parameters": parameters,
+        "account": account_id,
     }
     expected_step_function_output = {
-      "name": stackset_name,
-      "parameters": parameters,
-      "account": account_id,
-      "stackset_instance_in_treatment": {
-          "name": stackset_name,
-          "account_id": account_id
-      }
+        "name": stackset_name,
+        "parameters": parameters,
+        "account": account_id,
+        "stackset_instance_in_treatment": {
+            "name": stackset_name,
+            "account_id": account_id,
+        },
     }
     cloudformation_create_expected_params = {
-            "StackSetName": stackset_name,
-            "Accounts":[ account_id ],
-            "ParameterOverrides": parameter_overrides,
-            "Regions":[ region ]
+        "StackSetName": stackset_name,
+        "Accounts": [account_id],
+        "ParameterOverrides": parameter_overrides,
+        "Regions": [region],
     }
-    cloudformation_create_response = {
-            "OperationId": "operation-id"
-    }
+    cloudformation_create_response = {"OperationId": "operation-id"}
     cloudformation_list_expected_params = {
-            "StackSetName": stackset_name,
-            "StackInstanceAccount": account_id,
-            "StackInstanceRegion": region
+        "StackSetName": stackset_name,
+        "StackInstanceAccount": account_id,
+        "StackInstanceRegion": region,
     }
-    cloudformation_list_response = {
-        "Summaries": []
-    }
+    cloudformation_list_response = {"Summaries": []}
     ## Cloudformation mock configuration
-    cloudformation = Stubber(code.cloudformation)
+    cloudformation = Stubber(lambda_module.cloudformation)
     cloudformation.add_response(
-            "list_stack_instances",
-            cloudformation_list_response,
-            cloudformation_list_expected_params
+        "list_stack_instances",
+        cloudformation_list_response,
+        cloudformation_list_expected_params,
     )
     cloudformation.add_response(
-            "create_stack_instances",
-            cloudformation_create_response,
-            cloudformation_create_expected_params
+        "create_stack_instances",
+        cloudformation_create_response,
+        cloudformation_create_expected_params,
     )
     cloudformation.activate()
     # When
-    response = code.lambda_handler(step_function_input, {})
+    response = lambda_module.lambda_handler(step_function_input, {})
     cloudformation.deactivate()
     # Then
     assert response == expected_step_function_output
 
 
-def test_handler_update(monkeypatch):
+def test_handler_update(lambda_module, monkeypatch):
     """
     Given a setup function input for updating stack instances
     When the handler is called
     Then the UpdateStackInstances action of the CloudFormation API is called with the stackset parameters
     """
     # Given
-    monkeypatch.setenv("AWS_REGION", "eu-west-1")
-    monkeypatch.setattr(code.time, "sleep", lambda _: None)
+    monkeypatch.setattr(lambda_module.time, "sleep", lambda _: None)
     stackset_name = "vpc"
     account_id = "123456789876"
     region = "eu-west-1"
-    parameters = {
-        "CidrBlock": "10.0.0.0/24",
-        "EnableDnsHostnames": "true"
-    }
+    parameters = {"CidrBlock": "10.0.0.0/24", "EnableDnsHostnames": "true"}
     parameter_overrides = [
-        {
-            "ParameterKey": "CidrBlock",
-            "ParameterValue": "10.0.0.0/24"
-        },{
-            "ParameterKey": "EnableDnsHostnames",
-            "ParameterValue": "true"
-        }
+        {"ParameterKey": "CidrBlock", "ParameterValue": "10.0.0.0/24"},
+        {"ParameterKey": "EnableDnsHostnames", "ParameterValue": "true"},
     ]
     step_function_input = {
-      "name": stackset_name,
-      "parameters": parameters,
-      "account": account_id,
+        "name": stackset_name,
+        "parameters": parameters,
+        "account": account_id,
     }
     expected_step_function_output = {
-      "name": stackset_name,
-      "parameters": parameters,
-      "account": account_id,
-      "stackset_instance_in_treatment": {
-          "name": stackset_name,
-          "account_id": account_id
-      }
+        "name": stackset_name,
+        "parameters": parameters,
+        "account": account_id,
+        "stackset_instance_in_treatment": {
+            "name": stackset_name,
+            "account_id": account_id,
+        },
     }
     cloudformation_create_expected_params = {
         "StackSetName": stackset_name,
-        "Accounts":[ account_id ],
+        "Accounts": [account_id],
         "ParameterOverrides": parameter_overrides,
-        "Regions":[ region ]
+        "Regions": [region],
     }
-    cloudformation_create_response = {
-        "OperationId": "operation-id"
-    }
+    cloudformation_create_response = {"OperationId": "operation-id"}
     cloudformation_list_expected_params = {
         "StackSetName": stackset_name,
         "StackInstanceAccount": account_id,
-        "StackInstanceRegion": region
+        "StackInstanceRegion": region,
     }
     cloudformation_list_response = {
         "Summaries": [
@@ -139,85 +130,77 @@ def test_handler_update(monkeypatch):
                 "Account": account_id,
                 "Status": "CURRENT",
                 "StatusReason": "StatusReason",
-                "StackInstanceStatus": {
-                    "DetailedStatus": "SUCCESS"
-                },
+                "StackInstanceStatus": {"DetailedStatus": "SUCCESS"},
                 "OrganizationalUnitId": "",
-                "DriftStatus": "NOT_CHECKED"
+                "DriftStatus": "NOT_CHECKED",
             }
         ]
     }
     ## Cloudformation mock configuration
-    cloudformation = Stubber(code.cloudformation)
+    cloudformation = Stubber(lambda_module.cloudformation)
     cloudformation.add_response(
-            "list_stack_instances",
-            cloudformation_list_response,
-            cloudformation_list_expected_params
+        "list_stack_instances",
+        cloudformation_list_response,
+        cloudformation_list_expected_params,
     )
     cloudformation.add_response(
-            "update_stack_instances",
-            cloudformation_create_response,
-            cloudformation_create_expected_params
+        "update_stack_instances",
+        cloudformation_create_response,
+        cloudformation_create_expected_params,
     )
     cloudformation.activate()
     # When
-    response = code.lambda_handler(step_function_input, {})
+    response = lambda_module.lambda_handler(step_function_input, {})
     cloudformation.deactivate()
     # Then
     assert response == expected_step_function_output
 
 
-def test_handler_delete(monkeypatch):
+def test_handler_delete(lambda_module, monkeypatch):
     """
     Given a setup function input for updating stack instances
     When the handler is called
     Then the DeleteStackInstances action of the CloudFormation API is called with the stackset parameters
     """
     # Given
-    monkeypatch.setenv("AWS_REGION", "eu-west-1")
-    monkeypatch.setattr(code.time, "sleep", lambda _: None)
+    monkeypatch.setattr(lambda_module.time, "sleep", lambda _: None)
     stackset_name = "vpc"
     account_id = "123456789876"
     region = "eu-west-1"
-    parameters = {
-        "CidrBlock": "10.0.0.0/24",
-        "EnableDnsHostnames": "true"
-    }
+    parameters = {"CidrBlock": "10.0.0.0/24", "EnableDnsHostnames": "true"}
     step_function_input = {
-      "name": stackset_name,
-      "parameters": parameters,
-      "account": account_id,
-      "terminate": True
+        "name": stackset_name,
+        "parameters": parameters,
+        "account": account_id,
+        "terminate": True,
     }
     expected_step_function_output = {
-      "name": stackset_name,
-      "parameters": parameters,
-      "account": account_id,
-      "terminate": True,
-      "stackset_instance_in_treatment": {
-          "name": stackset_name,
-          "account_id": account_id
-      }
+        "name": stackset_name,
+        "parameters": parameters,
+        "account": account_id,
+        "terminate": True,
+        "stackset_instance_in_treatment": {
+            "name": stackset_name,
+            "account_id": account_id,
+        },
     }
     cloudformation_expected_params = {
-            "StackSetName": stackset_name,
-            "Accounts":[ account_id ],
-            "RetainStacks": False,
-            "Regions":[ region ]
+        "StackSetName": stackset_name,
+        "Accounts": [account_id],
+        "RetainStacks": False,
+        "Regions": [region],
     }
-    cloudformation_response = {
-            "OperationId": "operation-id"
-    }
+    cloudformation_response = {"OperationId": "operation-id"}
     ## Cloudformation mock configuration
-    cloudformation = Stubber(code.cloudformation)
+    cloudformation = Stubber(lambda_module.cloudformation)
     cloudformation.add_response(
-            "delete_stack_instances",
-            cloudformation_response,
-            cloudformation_expected_params
+        "delete_stack_instances",
+        cloudformation_response,
+        cloudformation_expected_params,
     )
     cloudformation.activate()
     # When
-    response = code.lambda_handler(step_function_input, {})
+    response = lambda_module.lambda_handler(step_function_input, {})
     cloudformation.deactivate()
     # Then
     assert response == expected_step_function_output

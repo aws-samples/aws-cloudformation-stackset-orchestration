@@ -13,22 +13,25 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import boto3
-import os
 import json
+import os
 import urllib.parse
+
+import boto3
 import yaml
 
-print('Loading function')
-
-s3 = boto3.client('s3')
+s3 = boto3.client("s3")
 step_functions = boto3.client("stepfunctions")
+
+STATE_MACHINE_ARN = os.getenv("STATE_MACHINE")
 
 
 def get_config_file(event):
     # Get event parameters
-    bucket = event['Records'][0]['s3']['bucket']['name']
-    key = urllib.parse.unquote_plus(event['Records'][0]['s3']['object']['key'], encoding='utf-8')
+    bucket = event["Records"][0]["s3"]["bucket"]["name"]
+    key = urllib.parse.unquote_plus(
+        event["Records"][0]["s3"]["object"]["key"], encoding="utf-8"
+    )
 
     # Get object config file
     try:
@@ -58,11 +61,13 @@ def add_account_information(config_file):
 
 def trigger_step_function(config_file):
     # Start step function
-    state_machine_arn = os.getenv('STATE_MACHINE')
-    print("Trigerring Step functions with these values: " + json.dumps(config_file, indent=2))
+    print(
+        "Trigerring Step functions with these values: "
+        + json.dumps(config_file, indent=2)
+    )
     response = step_functions.start_execution(
-        stateMachineArn=state_machine_arn,
-        input=json.dumps(config_file))
+        stateMachineArn=STATE_MACHINE_ARN, input=json.dumps(config_file)
+    )
     return response
 
 
@@ -71,4 +76,4 @@ def lambda_handler(event, context):
     config_file = parse(config_file)
     config_file = add_account_information(config_file)
     response = trigger_step_function(config_file)
-    return response['executionArn']
+    return response["executionArn"]

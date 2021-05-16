@@ -13,16 +13,20 @@
 # IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 # CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
-import boto3
-import os
 import json
-import time
+import os
 from random import randrange
+import time
 
-cloudformation = boto3.client('cloudformation')
+import boto3
+
+cloudformation = boto3.client("cloudformation")
+REGION = os.environ["AWS_REGION"]
+
 
 class StacksetCreationError(Exception):
-   pass
+    pass
+
 
 def check_stackset_instance_for_errors(stackset_instance):
 
@@ -31,18 +35,23 @@ def check_stackset_instance_for_errors(stackset_instance):
         stackset_instance_status_reason = stackset_instance["StatusReason"]
 
         # Raise exception if there is an error while creating the stackset instance
-        if stackset_instance_status == "OUTDATED" and "Error" in stackset_instance_status_reason:
+        if (
+            stackset_instance_status == "OUTDATED"
+            and "Error" in stackset_instance_status_reason
+        ):
             raise StacksetCreationError(stackset_instance_status_reason)
+
 
 def stackset_instance_ready(stackset_name, account_id, region):
 
     # Add jitter
-    time.sleep(randrange(10,20))
+    time.sleep(randrange(10, 20))
     # Get stackset instance information
     stackset_instance = cloudformation.list_stack_instances(
-                                StackSetName=stackset_name,
-                                StackInstanceAccount=account_id,
-                                StackInstanceRegion=region)
+        StackSetName=stackset_name,
+        StackInstanceAccount=account_id,
+        StackInstanceRegion=region,
+    )
     print("Recovered stacket instance: ")
     print(stackset_instance)
 
@@ -57,7 +66,6 @@ def stackset_instance_ready(stackset_name, account_id, region):
 
 
 def lambda_handler(event, context):
-    region = os.environ["AWS_REGION"]
     # Wait for stackset instance creation
     print("Waiting for stackset instance to be processed...")
     time.sleep(30)
@@ -73,7 +81,11 @@ def lambda_handler(event, context):
 
     # Update stackset instance status, or fail the pipeline if there is an error
     try:
-        event["stackset_instance_ready"] = True if terminate_stack_instance else stackset_instance_ready(stackset_name, account_id, region)
+        event["stackset_instance_ready"] = (
+            True
+            if terminate_stack_instance
+            else stackset_instance_ready(stackset_name, account_id, REGION)
+        )
     except StacksetCreationError as e:
         print("StacksetCreationError")
         print(e)
