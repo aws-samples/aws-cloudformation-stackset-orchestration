@@ -72,7 +72,6 @@ def test_trigger_step_function(lambda_module):
     s3.deactivate()
     step_functions.deactivate()
     # Then
-    # assert True
     assert response == "execution_arn"
 
 
